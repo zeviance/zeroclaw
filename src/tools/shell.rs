@@ -14,16 +14,14 @@ const MAX_OUTPUT_BYTES: usize = 1_048_576;
 /// Environment variables safe to pass to shell commands.
 /// Only functional variables are included — never API keys or secrets.
 const SAFE_ENV_VARS: &[&str] = &[
-    "PATH",
-    "HOME",
-    "TERM",
-    "LANG",
-    "LC_ALL",
-    "LC_CTYPE",
-    "USER",
-    "SHELL",
-    "TMPDIR",
-    // Windows essentials
+    "PATH", "HOME", "TERM", "LANG", "LC_ALL", "LC_CTYPE", "USER", "SHELL", "TMPDIR",
+];
+
+/// Windows-specific environment variables safe to pass to shell commands.
+/// USERNAME and COMPUTERNAME are intentionally excluded — they are sensitive
+/// identity information that should not be automatically forwarded.
+#[cfg(windows)]
+const SAFE_ENV_VARS_WINDOWS: &[&str] = &[
     "SystemRoot",
     "windir",
     "ComSpec",
@@ -35,10 +33,6 @@ const SAFE_ENV_VARS: &[&str] = &[
     "ProgramFiles",
     "ProgramFiles(x86)",
     "ProgramData",
-    "PUBLIC",
-    "ALLUSERSPROFILE",
-    "COMPUTERNAME",
-    "USERNAME",
     "OS",
     "PROCESSOR_ARCHITECTURE",
 ];
@@ -61,7 +55,11 @@ fn is_valid_env_var_name(name: &str) -> bool {
         Some(first) if first.is_ascii_alphabetic() || first == '_' => {}
         _ => return false,
     }
-    chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '(' || ch == ')')
+    if cfg!(windows) {
+        chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '(' || ch == ')')
+    } else {
+        chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+    }
 }
 
 fn collect_allowed_shell_env_vars(security: &SecurityPolicy) -> Vec<String> {
@@ -71,10 +69,12 @@ fn collect_allowed_shell_env_vars(security: &SecurityPolicy) -> Vec<String> {
     #[cfg(windows)]
     let all_env_vars: Vec<(String, String)> = std::env::vars().collect();
 
-    for key in SAFE_ENV_VARS
-        .iter()
-        .copied()
-        .chain(security.shell_env_passthrough.iter().map(|s| s.as_str()))
+    #[cfg(windows)]
+    let base_vars = SAFE_ENV_VARS.iter().copied().chain(SAFE_ENV_VARS_WINDOWS.iter().copied());
+    #[cfg(not(windows))]
+    let base_vars = SAFE_ENV_VARS.iter().copied();
+
+    for key in base_vars.chain(security.shell_env_passthrough.iter().map(|s| s.as_str()))
     {
         let candidate = key.trim();
         if candidate.is_empty() || !is_valid_env_var_name(candidate) {
