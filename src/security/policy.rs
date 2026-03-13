@@ -120,17 +120,13 @@ impl Default for SecurityPolicy {
                     cmds.extend(vec![
                         "dir".into(),
                         "type".into(),
-                        "move".into(),
-                        "copy".into(),
                         "del".into(),
                         "mkdir".into(),
-                        "rmdir".into(),
-                        "set".into(),
                         "ping".into(),
                         "timeout".into(),
                         "where".into(),
                         "tasklist".into(),
-                        "taskkill".into(),
+                        "findstr".into(),
                     ]);
                 }
                 cmds
@@ -1145,27 +1141,7 @@ impl SecurityPolicy {
         autonomy_config: &crate::config::AutonomyConfig,
         workspace_dir: &Path,
     ) -> Self {
-        let allowed_commands = {
-            let cmds = autonomy_config.allowed_commands.clone();
-
-            // Ensure Windows defaults are present on Windows
-            #[cfg(windows)]
-            {
-                let mut cmds = cmds;
-                let win_defaults = vec![
-                    "dir", "type", "move", "copy", "del", "mkdir", "rmdir", "set", "ping",
-                    "timeout", "where", "tasklist", "taskkill",
-                ];
-                for cmd in win_defaults {
-                    if !cmds.iter().any(|c| c == cmd) {
-                        cmds.push(cmd.into());
-                    }
-                }
-                cmds
-            }
-            #[cfg(not(windows))]
-            cmds
-        };
+        let allowed_commands = autonomy_config.allowed_commands.clone();
 
         Self {
             autonomy: autonomy_config.level,
